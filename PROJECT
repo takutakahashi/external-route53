@@ -1,0 +1,7 @@
+domain: takutakahashi.dev
+repo: github.com/takutakahashi/external-route53
+resources:
+- group: route53
+  kind: HealthCheck
+  version: v1
+version: "2"

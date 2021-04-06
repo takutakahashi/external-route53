@@ -1,0 +1,24 @@
+# permissions for end users to edit healthchecks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: healthcheck-editor-role
+rules:
+- apiGroups:
+  - route53.takutakahashi.dev
+  resources:
+  - healthchecks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - route53.takutakahashi.dev
+  resources:
+  - healthchecks/status
+  verbs:
+  - get

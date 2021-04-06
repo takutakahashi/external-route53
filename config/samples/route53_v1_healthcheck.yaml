@@ -1,0 +1,7 @@
+apiVersion: route53.takutakahashi.dev/v1
+kind: HealthCheck
+metadata:
+  name: healthcheck-sample
+spec:
+  # Add fields here
+  foo: bar

@@ -1,0 +1,20 @@
+# permissions for end users to view healthchecks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: healthcheck-viewer-role
+rules:
+- apiGroups:
+  - route53.takutakahashi.dev
+  resources:
+  - healthchecks
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - route53.takutakahashi.dev
+  resources:
+  - healthchecks/status
+  verbs:
+  - get
