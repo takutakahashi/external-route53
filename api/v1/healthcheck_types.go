@@ -40,7 +40,7 @@ type HealthCheckFeatures struct {
 	SearchString string `json:"searchString,omitempty"`
 	LatencyGraph bool   `json:"latencyGraph,omitempty"`
 }
-type HealthCheckIPEndpoint struct {
+type HealthCheckEndpoint struct {
 	Address  string `json:"address,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
 }
