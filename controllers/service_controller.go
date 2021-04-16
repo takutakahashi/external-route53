@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/juju/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,12 +38,32 @@ type ServiceReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 
 func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	ctx := context.Background()
 	_ = r.Log.WithValues("service", req.NamespacedName)
-
-	// your logic here
+	svc := corev1.Service{}
+	if err := r.Get(ctx, req.NamespacedName, &svc); err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
+	if err := r.validate(svc.DeepCopy()); err != nil {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if err := r.reconcile(svc.DeepCopy()); err != nil {
+		return ctrl.Result{Requeue: true}, nil
+	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ServiceReconciler) validate(svc *corev1.Service) error {
+	return nil
+}
+
+func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
+	return nil
 }
 
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
