@@ -59,10 +59,15 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func (r *ServiceReconciler) validate(svc *corev1.Service) error {
+	/**
+	check this service is compatible for creating resources
+	*/
 	return nil
 }
 
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
+	hostname := svc.Annotations["a"]
+	_ = hostname
 	return nil
 }
 
