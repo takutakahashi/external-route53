@@ -2,7 +2,6 @@ package dns
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -33,14 +32,16 @@ const (
 )
 
 type UpsertRecordSetOpt struct {
-	Hostname      string
-	Type          string
-	Identifier    string
-	HealthCheckID string
-	HostedZoneID  string
-	Weight        *int
-	TTL           int
-	Alias         bool
+	Hostname        string
+	Type            string
+	Identifier      string
+	HealthCheckID   string
+	HostedZoneID    string
+	Weight          int
+	TTL             int
+	Alias           bool
+	TargetHostname  string
+	TargetIPAddress string
 }
 
 func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
@@ -51,19 +52,7 @@ func ensureRecord(ro UpsertRecordSetOpt) error {
 	if err := validateRecordSetOpt(ro); err != nil {
 		return err
 	}
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
-	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
-		HostedZoneId:          aws.String(ro.HostedZoneID),
-		StartRecordIdentifier: &ro.Identifier,
-		StartRecordName:       &ro.Hostname,
-		StartRecordType:       &ro.Type,
-	})
-	if err != nil {
-		return err
-	}
-	fmt.Println(out.ResourceRecordSets[0].ResourceRecords[0])
-	return nil
+	return upsert(ro)
 }
 
 func recordExists(ro UpsertRecordSetOpt) (bool, error) {
@@ -88,6 +77,66 @@ func recordExists(ro UpsertRecordSetOpt) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func upsert(ro UpsertRecordSetOpt) error {
+	return query("UPSERT", ro)
+}
+
+func delete(ro UpsertRecordSetOpt) error {
+	err := query("DELETE", ro)
+	if strings.Contains(err.Error(), "but it was not found") {
+		return nil
+	}
+	return err
+
+}
+
+func query(action string, ro UpsertRecordSetOpt) error {
+	var healthCheckId *string = nil
+	if ro.HealthCheckID != "" {
+		healthCheckId = &ro.HealthCheckID
+	}
+	mySession := session.Must(session.NewSession())
+	r := route53.New(mySession)
+	var at *route53.AliasTarget = nil
+	var rrs []*route53.ResourceRecord = nil
+	if ro.Alias {
+		at = &route53.AliasTarget{
+			EvaluateTargetHealth: aws.Bool(true),
+			HostedZoneId:         aws.String(ro.HostedZoneID),
+			DNSName:              aws.String(ro.TargetHostname),
+		}
+	} else {
+		rrs = []*route53.ResourceRecord{
+			{Value: aws.String(ro.TargetIPAddress)},
+		}
+	}
+	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
+		HostedZoneId: aws.String(ro.HostedZoneID),
+		ChangeBatch: &route53.ChangeBatch{
+			Comment: aws.String("change from external-route53"),
+			Changes: []*route53.Change{
+				{
+					Action: aws.String(action),
+					ResourceRecordSet: &route53.ResourceRecordSet{
+						Name:            aws.String(ro.Hostname),
+						AliasTarget:     at,
+						ResourceRecords: rrs,
+						SetIdentifier:   aws.String(ro.Identifier),
+						Weight:          aws.Int64(int64(ro.Weight)),
+						HealthCheckId:   healthCheckId,
+						Type:            aws.String(ro.Type),
+						TTL:             aws.Int64(int64(ro.TTL)),
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
