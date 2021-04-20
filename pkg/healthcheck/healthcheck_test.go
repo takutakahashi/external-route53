@@ -33,8 +33,7 @@ func TestEnsure(t *testing.T) {
 						Path:             "/",
 						FailureThreshold: 1,
 						Endpoint: route53v1.HealthCheckEndpoint{
-							Address:  "120.74.236.156",
-							Hostname: "mf.in.takutakahashi.dev",
+							Address: "8.8.8.8",
 						},
 						Features: route53v1.HealthCheckFeatures{
 							FastInterval: true,
