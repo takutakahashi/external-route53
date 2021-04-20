@@ -2,6 +2,7 @@ package dns
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -28,7 +29,7 @@ const (
 	// set if health check will be created
 	healthCheckAnnotationKey = "external-route53.io/health-check"
 	// specifiy zone id
-	zoneAnnotationKey = "external-route53.io/zone"
+	zoneAnnotationKey = "external-route53.io/hosted-zone-id"
 )
 
 type UpsertRecordSetOpt struct {
@@ -46,6 +47,76 @@ type UpsertRecordSetOpt struct {
 
 func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
 	return nil
+}
+
+func Ensure(svc *corev1.Service) error {
+	ro, err := toUpsertRecordSetOpt(svc)
+	if err != nil {
+		return err
+	}
+	return ensureRecord(ro)
+}
+
+func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
+	var w, ttl int = 1, 10
+	_, ok := svc.Annotations[weightAnnotationKey]
+	if ok {
+		ret, err := strconv.Atoi(svc.Annotations[weightAnnotationKey])
+		if err != nil {
+			return UpsertRecordSetOpt{}, err
+		}
+		w = ret
+	}
+	_, ok = svc.Annotations[ttlAnnotationKey]
+	if ok {
+		ret, err := strconv.Atoi(svc.Annotations[ttlAnnotationKey])
+		if err != nil {
+			return UpsertRecordSetOpt{}, err
+		}
+		ttl = ret
+	}
+	var alias bool
+	_, ok = svc.Annotations[aliasAnnotationKey]
+	if ok {
+		ret, err := strconv.ParseBool(svc.Annotations[aliasAnnotationKey])
+		if err != nil {
+			return UpsertRecordSetOpt{}, err
+		}
+		alias = ret
+	} else {
+		alias = svc.Spec.Type == corev1.ServiceTypeExternalName
+	}
+	recordType, ok := svc.Annotations[recordTypeAnnotationKey]
+	if !ok {
+		recordType = "A"
+	}
+	identifier, ok := svc.Annotations[setIdentifierAnnotationKey]
+	if !ok {
+		identifier = svc.GetSelfLink()
+	}
+	var thn, tip string = "", ""
+	switch svc.Spec.Type {
+	case corev1.ServiceTypeExternalName:
+		thn = svc.Spec.ExternalName
+	case corev1.ServiceTypeLoadBalancer:
+		tip = svc.Status.LoadBalancer.Ingress[0].IP
+	}
+	ro := UpsertRecordSetOpt{
+		Hostname:        svc.Annotations[hostnameAnnotationKey],
+		Type:            recordType,
+		Identifier:      identifier,
+		HealthCheckID:   svc.Annotations[healhCheckIdAnnotationKey],
+		HostedZoneID:    svc.Annotations[zoneAnnotationKey],
+		Weight:          w,
+		TTL:             ttl,
+		Alias:           alias,
+		TargetHostname:  thn,
+		TargetIPAddress: tip,
+	}
+	if err := validateRecordSetOpt(ro); err != nil {
+		return UpsertRecordSetOpt{}, err
+	}
+	return ro, nil
 }
 
 func ensureRecord(ro UpsertRecordSetOpt) error {
@@ -154,6 +225,12 @@ func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	}
 	if ro.TTL < 10 {
 		return errors.New("TTL must be over 10s")
+	}
+	if ro.Alias && ro.TargetHostname == "" {
+		return errors.New("Alias record enabled but target hostname is not defined")
+	}
+	if !ro.Alias && ro.TargetIPAddress == "" {
+		return errors.New("Alias record disabled but target IP Address is not defined")
 	}
 	return nil
 }
