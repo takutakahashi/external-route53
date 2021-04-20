@@ -1,6 +1,8 @@
 package healthcheck
 
 import (
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
@@ -8,6 +10,7 @@ import (
 )
 
 func Ensure(h *v1.HealthCheck) (*v1.HealthCheck, error) {
+	callerReference := fmt.Sprintf("%s/%s", h.Namespace, h.Name)
 	mySession := session.Must(session.NewSession())
 	r := route53.New(mySession)
 	var ip, hostname *string = nil, nil
@@ -29,17 +32,18 @@ func Ensure(h *v1.HealthCheck) (*v1.HealthCheck, error) {
 		return nil, err
 	}
 	for _, res := range lout.HealthChecks {
-		if *res.CallerReference == h.SelfLink {
+		if *res.CallerReference == callerReference {
 			id = *res.Id
 		}
 	}
 	if id == "" {
 
 		out, err := r.CreateHealthCheck(&route53.CreateHealthCheckInput{
-			CallerReference: aws.String(h.SelfLink),
+			CallerReference: aws.String(callerReference),
 			HealthCheckConfig: &route53.HealthCheckConfig{
 				EnableSNI:                aws.Bool(true),
 				FailureThreshold:         aws.Int64(int64(h.Spec.FailureThreshold)),
+				Port:                     aws.Int64(int64(h.Spec.Port)),
 				FullyQualifiedDomainName: hostname,
 				IPAddress:                ip,
 				ResourcePath:             aws.String(h.Spec.Path),

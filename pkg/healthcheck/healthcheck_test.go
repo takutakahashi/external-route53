@@ -23,7 +23,6 @@ func TestEnsure(t *testing.T) {
 					ObjectMeta: v1.ObjectMeta{
 						Name:      "test",
 						Namespace: "test",
-						SelfLink:  "/api/v1/namespaces/test/healthchecks/test",
 					},
 					Spec: route53v1.HealthCheckSpec{
 						Enabled:          true,

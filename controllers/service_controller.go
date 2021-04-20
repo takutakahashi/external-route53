@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/juju/errors"
+	"github.com/takutakahashi/external-route53/pkg/dns"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -66,9 +67,7 @@ func (r *ServiceReconciler) validate(svc *corev1.Service) error {
 }
 
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
-	hostname := svc.Annotations["a"]
-	_ = hostname
-	return nil
+	return dns.Ensure(svc)
 }
 
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {

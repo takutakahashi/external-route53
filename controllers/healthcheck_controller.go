@@ -20,11 +20,13 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	apierrors "github.com/juju/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	route53v1 "github.com/takutakahashi/external-route53/api/v1"
+	"github.com/takutakahashi/external-route53/pkg/healthcheck"
 )
 
 // HealthCheckReconciler reconciles a HealthCheck object
@@ -38,14 +40,39 @@ type HealthCheckReconciler struct {
 // +kubebuilder:rbac:groups=route53.takutakahashi.dev,resources=healthchecks/status,verbs=get;update;patch
 
 func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
+	// TODO: add Event
+	ctx := context.Background()
 	_ = r.Log.WithValues("healthcheck", req.NamespacedName)
-
-	// your logic here
-
+	h := route53v1.HealthCheck{}
+	err := r.Get(ctx, req.NamespacedName, &h)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		} else {
+			return ctrl.Result{}, err
+		}
+	}
+	if h.DeletionTimestamp != nil {
+		err = r.reconcileDelete(h)
+	} else {
+		err = r.reconcile(h)
+	}
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
+func (r *HealthCheckReconciler) reconcile(h route53v1.HealthCheck) error {
+	newHealthCheck, err := healthcheck.Ensure(h.DeepCopy())
+	if err != nil {
+		return err
+	}
+	return r.Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
+}
+func (r *HealthCheckReconciler) reconcileDelete(h route53v1.HealthCheck) error {
+	return nil
+}
 func (r *HealthCheckReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&route53v1.HealthCheck{}).
