@@ -43,7 +43,7 @@ func Ensure(h *v1.HealthCheck) (*v1.HealthCheck, error) {
 				FullyQualifiedDomainName: hostname,
 				IPAddress:                ip,
 				ResourcePath:             aws.String(h.Spec.Path),
-				Type:                     aws.String("HTTPS"),
+				Type:                     aws.String(string(h.Spec.Protocol)),
 				Inverted:                 aws.Bool(h.Spec.Invert),
 				Disabled:                 aws.Bool(!h.Spec.Enabled),
 				RequestInterval:          aws.Int64(requestInterval),
