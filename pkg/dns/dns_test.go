@@ -344,3 +344,72 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsure(t *testing.T) {
+	type args struct {
+		svc *corev1.Service
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "omitted-loadbalancer",
+			args: args{
+				svc: &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "test",
+						Annotations: map[string]string{
+							hostnameAnnotationKey:    "omitted-lb.test.takutakahashi.dev",
+							healthCheckAnnotationKey: "enable",
+							zoneAnnotationKey:        "Z09261522C0IVI11TUTK7",
+						},
+						SelfLink: "/api/v1/namespaces/test/services/test",
+					},
+					Spec: corev1.ServiceSpec{
+						Type: corev1.ServiceTypeLoadBalancer,
+					},
+					Status: corev1.ServiceStatus{
+						LoadBalancer: corev1.LoadBalancerStatus{
+							Ingress: []corev1.LoadBalancerIngress{
+								{IP: "10.10.10.1"},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "omitted-externalName",
+			args: args{
+				svc: &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "test",
+						Annotations: map[string]string{
+							hostnameAnnotationKey:    "test1.test.takutakahashi.dev",
+							healthCheckAnnotationKey: "enable",
+							zoneAnnotationKey:        "Z09261522C0IVI11TUTK7",
+						},
+						SelfLink: "/api/v1/namespaces/test/services/test",
+					},
+					Spec: corev1.ServiceSpec{
+						Type:         corev1.ServiceTypeExternalName,
+						ExternalName: "external-route53.test.takutakahashi.dev",
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Ensure(tt.args.svc); (err != nil) != tt.wantErr {
+				t.Errorf("Ensure() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

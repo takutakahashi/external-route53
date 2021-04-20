@@ -170,6 +170,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 	}
 	mySession := session.Must(session.NewSession())
 	r := route53.New(mySession)
+	var ttl *int64
 	var at *route53.AliasTarget = nil
 	var rrs []*route53.ResourceRecord = nil
 	if ro.Alias {
@@ -178,30 +179,33 @@ func query(action string, ro UpsertRecordSetOpt) error {
 			HostedZoneId:         aws.String(ro.HostedZoneID),
 			DNSName:              aws.String(ro.TargetHostname),
 		}
+		ttl = nil
 	} else {
 		rrs = []*route53.ResourceRecord{
 			{Value: aws.String(ro.TargetIPAddress)},
 		}
+		ttl = aws.Int64(int64(ro.TTL))
+	}
+	changes := []*route53.Change{
+		{
+			Action: aws.String(action),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name:            aws.String(ro.Hostname),
+				AliasTarget:     at,
+				ResourceRecords: rrs,
+				SetIdentifier:   aws.String(ro.Identifier),
+				Weight:          aws.Int64(int64(ro.Weight)),
+				HealthCheckId:   healthCheckId,
+				Type:            aws.String(ro.Type),
+				TTL:             ttl,
+			},
+		},
 	}
 	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		HostedZoneId: aws.String(ro.HostedZoneID),
 		ChangeBatch: &route53.ChangeBatch{
 			Comment: aws.String("change from external-route53"),
-			Changes: []*route53.Change{
-				{
-					Action: aws.String(action),
-					ResourceRecordSet: &route53.ResourceRecordSet{
-						Name:            aws.String(ro.Hostname),
-						AliasTarget:     at,
-						ResourceRecords: rrs,
-						SetIdentifier:   aws.String(ro.Identifier),
-						Weight:          aws.Int64(int64(ro.Weight)),
-						HealthCheckId:   healthCheckId,
-						Type:            aws.String(ro.Type),
-						TTL:             aws.Int64(int64(ro.TTL)),
-					},
-				},
-			},
+			Changes: changes,
 		},
 	})
 	if err != nil {
