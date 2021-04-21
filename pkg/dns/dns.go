@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	hostnameAnnotationKey = "external-dns.alpha.kubernetes.io/hostname"
+	HostnameAnnotationKey = "external-dns.alpha.kubernetes.io/hostname"
 	// The annotation used for defining the desired ingress target
 	targetAnnotationKey = "external-dns.alpha.kubernetes.io/target"
 	// The annotation used for defining the desired DNS record TTL
@@ -29,7 +29,7 @@ const (
 	// specified record-type: ex: A, CNAME
 	recordTypeAnnotationKey = "external-route53.io/record-type"
 	// set if health check will be created
-	healthCheckAnnotationKey = "external-route53.io/health-check"
+	HealthCheckAnnotationKey = "external-route53.io/health-check"
 	// specifiy zone id
 	zoneAnnotationKey = "external-route53.io/hosted-zone-id"
 )
@@ -104,7 +104,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		tip = svc.Status.LoadBalancer.Ingress[0].IP
 	}
 	ro := UpsertRecordSetOpt{
-		Hostname:        svc.Annotations[hostnameAnnotationKey],
+		Hostname:        svc.Annotations[HostnameAnnotationKey],
 		Type:            recordType,
 		Identifier:      identifier,
 		HealthCheckID:   svc.Annotations[healhCheckIdAnnotationKey],

@@ -18,9 +18,11 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	apierrors "github.com/juju/errors"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +51,8 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		} else {
-			return ctrl.Result{}, err
+			logrus.Error(err)
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 		}
 	}
 	if h.DeletionTimestamp != nil {
@@ -58,7 +61,8 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		err = r.reconcile(h)
 	}
 	if err != nil {
-		return ctrl.Result{}, err
+		logrus.Error(err)
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -68,7 +72,7 @@ func (r *HealthCheckReconciler) reconcile(h route53v1.HealthCheck) error {
 	if err != nil {
 		return err
 	}
-	return r.Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
+	return r.Status().Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
 }
 func (r *HealthCheckReconciler) reconcileDelete(h route53v1.HealthCheck) error {
 	return nil
