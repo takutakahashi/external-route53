@@ -49,21 +49,11 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 	}
-	if err := r.validate(svc.DeepCopy()); err != nil {
-		return ctrl.Result{Requeue: true}, nil
-	}
 	if err := r.reconcile(svc.DeepCopy()); err != nil {
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *ServiceReconciler) validate(svc *corev1.Service) error {
-	/**
-	check this service is compatible for creating resources
-	*/
-	return nil
 }
 
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {

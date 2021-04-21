@@ -2,12 +2,14 @@ package dns
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -92,7 +94,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	}
 	identifier, ok := svc.Annotations[setIdentifierAnnotationKey]
 	if !ok {
-		identifier = svc.GetSelfLink()
+		identifier = fmt.Sprintf("%s/%s/%s", svc.Namespace, svc.Name, svc.UID)
 	}
 	var thn, tip string = "", ""
 	switch svc.Spec.Type {
@@ -201,6 +203,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 			},
 		},
 	}
+	logrus.Info(changes)
 	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		HostedZoneId: aws.String(ro.HostedZoneID),
 		ChangeBatch: &route53.ChangeBatch{

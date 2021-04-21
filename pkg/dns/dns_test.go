@@ -185,11 +185,12 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 							ttlAnnotationKey:           "10",
 							healhCheckIdAnnotationKey:  "",
 							weightAnnotationKey:        "1",
-							setIdentifierAnnotationKey: "/api/v1/namespaces/test/services/test",
+							setIdentifierAnnotationKey: "test/test",
 							recordTypeAnnotationKey:    "A",
 							healthCheckAnnotationKey:   "enable",
 							zoneAnnotationKey:          "test",
 						},
+						UID: "aaa",
 					},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -206,7 +207,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
-				Identifier:      "/api/v1/namespaces/test/services/test",
+				Identifier:      "test/test",
 				HealthCheckID:   "",
 				HostedZoneID:    "test",
 				Weight:          1,
@@ -229,7 +230,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 							healthCheckAnnotationKey: "enable",
 							zoneAnnotationKey:        "test",
 						},
-						SelfLink: "/api/v1/namespaces/test/services/test",
+						UID: "aaa",
 					},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -246,7 +247,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
-				Identifier:      "/api/v1/namespaces/test/services/test",
+				Identifier:      "test/test/aaa",
 				HealthCheckID:   "",
 				HostedZoneID:    "test",
 				Weight:          1,
@@ -270,11 +271,12 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 							ttlAnnotationKey:           "10",
 							healhCheckIdAnnotationKey:  "",
 							weightAnnotationKey:        "1",
-							setIdentifierAnnotationKey: "/api/v1/namespaces/test/services/test",
+							setIdentifierAnnotationKey: "test/test",
 							recordTypeAnnotationKey:    "A",
 							healthCheckAnnotationKey:   "enable",
 							zoneAnnotationKey:          "test",
 						},
+						UID: "aaa",
 					},
 					Spec: corev1.ServiceSpec{
 						Type:         corev1.ServiceTypeExternalName,
@@ -285,7 +287,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
-				Identifier:      "/api/v1/namespaces/test/services/test",
+				Identifier:      "test/test",
 				HealthCheckID:   "",
 				HostedZoneID:    "test",
 				Weight:          1,
@@ -308,7 +310,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 							healthCheckAnnotationKey: "enable",
 							zoneAnnotationKey:        "test",
 						},
-						SelfLink: "/api/v1/namespaces/test/services/test",
+						UID: "aaa",
 					},
 					Spec: corev1.ServiceSpec{
 						Type:         corev1.ServiceTypeExternalName,
@@ -319,7 +321,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
-				Identifier:      "/api/v1/namespaces/test/services/test",
+				Identifier:      "test/test/aaa",
 				HealthCheckID:   "",
 				HostedZoneID:    "test",
 				Weight:          1,
@@ -366,7 +368,6 @@ func TestEnsure(t *testing.T) {
 							healthCheckAnnotationKey: "enable",
 							zoneAnnotationKey:        "Z09261522C0IVI11TUTK7",
 						},
-						SelfLink: "/api/v1/namespaces/test/services/test",
 					},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -394,7 +395,6 @@ func TestEnsure(t *testing.T) {
 							healthCheckAnnotationKey: "enable",
 							zoneAnnotationKey:        "Z09261522C0IVI11TUTK7",
 						},
-						SelfLink: "/api/v1/namespaces/test/services/test",
 					},
 					Spec: corev1.ServiceSpec{
 						Type:         corev1.ServiceTypeExternalName,
