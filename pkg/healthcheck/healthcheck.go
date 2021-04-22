@@ -181,7 +181,7 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 				Value: aws.String(name)},
 		},
 	})
-	logrus.Info(out)
+	logrus.Info(out, err)
 	if err != nil {
 		return nil, err
 	}

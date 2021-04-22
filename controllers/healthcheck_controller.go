@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,9 +58,6 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		}
 	}
 	queriedGeneration, _ := strconv.ParseInt(h.Annotations[queriedGenerationAnnotationKey], 0, 64)
-	logrus.Info(queriedGeneration)
-	logrus.Info(h.Generation)
-	logrus.Info(h.Generation == queriedGeneration)
 	if err == nil && h.Generation == queriedGeneration {
 		return ctrl.Result{}, nil
 	}
