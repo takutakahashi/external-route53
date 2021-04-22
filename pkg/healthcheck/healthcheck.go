@@ -3,26 +3,32 @@ package healthcheck
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/juju/errors"
 	route53v1 "github.com/takutakahashi/external-route53/api/v1"
 	r53client "github.com/takutakahashi/external-route53/pkg/client"
+	"github.com/takutakahashi/external-route53/pkg/dns"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func EnsureResource(svc *corev1.Service) error {
-	h := buildResource(svc)
+func EnsureResource(svc *corev1.Service) (*corev1.Service, error) {
+	h, err := buildResource(svc)
+	if err != nil {
+		return nil, err
+	}
 	if h == nil {
-		return nil
+		return nil, nil
 	}
 	c, err := r53client.New()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ctx := context.TODO()
 	nn := types.NamespacedName{
@@ -30,21 +36,39 @@ func EnsureResource(svc *corev1.Service) error {
 		Namespace: h.Namespace,
 	}
 	if err := c.Get(ctx, nn, h); err == nil {
-		h = buildResource(svc)
-		if err := c.Update(ctx, h, &client.UpdateOptions{}); err != nil {
-			return err
+		h, err = buildResource(svc)
+		if err != nil {
+			return nil, err
 		}
-		return nil
+		if err := c.Update(ctx, h, &client.UpdateOptions{}); err != nil {
+			return nil, err
+		}
+		return nil, nil
 	}
-	if err := c.Create(context.TODO(), h, &client.CreateOptions{}); err != nil {
-		return err
+	if err := c.Create(ctx, h, &client.CreateOptions{}); err != nil {
+		return nil, err
 	}
-	return nil
+	for {
+		if err := c.Get(ctx, nn, h); err != nil {
+			return nil, err
+		}
+		if h.Status.ID != "" {
+			svc.Annotations[dns.HealthCheckIdAnnotationKey] = h.Status.ID
+			return svc, nil
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
 
-func buildResource(svc *corev1.Service) *route53v1.HealthCheck {
+func buildResource(svc *corev1.Service) (*route53v1.HealthCheck, error) {
 	if svc.Spec.Type == corev1.ServiceTypeExternalName {
-		return nil
+		return nil, nil
+	}
+	if len(svc.Spec.Ports) == 0 {
+		return nil, errors.New("no ports were found")
+	}
+	if len(svc.Status.LoadBalancer.Ingress) == 0 {
+		return nil, errors.New("no loadbalancer IP was found")
 	}
 	p := svc.Spec.Ports[0].Port
 	if svc.Spec.Type == corev1.ServiceTypeNodePort {
@@ -69,11 +93,12 @@ func buildResource(svc *corev1.Service) *route53v1.HealthCheck {
 			},
 		},
 	}
-	return &h
+	return &h, nil
 }
 
 func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
-	callerReference := fmt.Sprintf("%s/%s/%s", h.Namespace, h.Name, h.ResourceVersion)
+	name := fmt.Sprintf("%s/%s", h.Namespace, h.Name)
+	callerReference := fmt.Sprintf("%s/%s", name, h.ResourceVersion)
 	mySession := session.Must(session.NewSession())
 	r := route53.New(mySession)
 	var ip, hostname *string = nil, nil
@@ -152,7 +177,7 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 		AddTags: []*route53.Tag{
 			{
 				Key:   aws.String("Name"),
-				Value: aws.String(callerReference)},
+				Value: aws.String(name)},
 		},
 	})
 	if err != nil {
@@ -161,6 +186,15 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 	return h, nil
 }
 
-func Delete(h route53v1.HealthCheck) error {
-	return nil
+func Delete(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
+	mySession := session.Must(session.NewSession())
+	r := route53.New(mySession)
+	_, err := r.DeleteHealthCheck(&route53.DeleteHealthCheckInput{
+		HealthCheckId: aws.String(h.Status.ID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	h.Status.ID = ""
+	return h, nil
 }

@@ -20,10 +20,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/juju/errors"
 	"github.com/takutakahashi/external-route53/pkg/dns"
 	"github.com/takutakahashi/external-route53/pkg/healthcheck"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,9 +58,13 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 }
 
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
-	if a, ok := svc.Annotations[dns.HealthCheckAnnotationKey]; ok && a == "true" {
-		if err := healthcheck.EnsureResource(svc); err != nil {
+	if a, ok := svc.Annotations[dns.HealthCheckAnnotationKey]; ok && a == "true" && svc.Annotations[dns.HealthCheckIdAnnotationKey] == "" {
+		hcsvc, err := healthcheck.EnsureResource(svc)
+		if err != nil {
 			return err
+		}
+		if hcsvc != nil {
+			return r.Update(context.TODO(), hcsvc.DeepCopy(), &client.UpdateOptions{})
 		}
 	}
 	return dns.Ensure(svc)

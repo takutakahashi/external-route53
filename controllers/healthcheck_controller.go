@@ -21,8 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	apierrors "github.com/juju/errors"
-	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +37,8 @@ type HealthCheckReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+const finalizer = "healthcheck.finalizer.external-route53.io"
+
 // +kubebuilder:rbac:groups=route53.takutakahashi.dev,resources=healthchecks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route53.takutakahashi.dev,resources=healthchecks/status,verbs=get;update;patch
 
@@ -48,10 +49,9 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	h := route53v1.HealthCheck{}
 	err := r.Get(ctx, req.NamespacedName, &h)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		} else {
-			logrus.Error(err)
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 		}
 	}
@@ -61,7 +61,6 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		err = r.reconcile(h)
 	}
 	if err != nil {
-		logrus.Error(err)
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 	return ctrl.Result{}, nil
@@ -72,13 +71,29 @@ func (r *HealthCheckReconciler) reconcile(h route53v1.HealthCheck) error {
 	if err != nil {
 		return err
 	}
-	return r.Status().Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
+	newHealthCheck.Finalizers = append(newHealthCheck.Finalizers, finalizer)
+	return r.Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
 }
 func (r *HealthCheckReconciler) reconcileDelete(h route53v1.HealthCheck) error {
-	return nil
+	newHealthCheck, err := healthcheck.Delete(h.DeepCopy())
+	if err != nil {
+		return err
+	}
+	newHealthCheck.Finalizers = removeString(newHealthCheck.Finalizers, finalizer)
+	return r.Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
 }
 func (r *HealthCheckReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&route53v1.HealthCheck{}).
 		Complete(r)
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }

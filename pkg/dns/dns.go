@@ -22,7 +22,7 @@ const (
 	// The annotation used for switching to the alias record types e. g. AWS Alias records instead of a normal CNAME
 	aliasAnnotationKey = "external-dns.alpha.kubernetes.io/alias"
 	// external-dns defined annotation keys for route53
-	healhCheckIdAnnotationKey  = "external-dns.alpha.kubernetes.io/aws-health-check-id"
+	HealthCheckIdAnnotationKey = "external-dns.alpha.kubernetes.io/aws-health-check-id"
 	weightAnnotationKey        = "external-dns.alpha.kubernetes.io/aws-weight"
 	setIdentifierAnnotationKey = "external-dns.alpha.kubernetes.io/set-identifier"
 	// external-route53 defined annotation keys
@@ -107,7 +107,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		Hostname:        svc.Annotations[HostnameAnnotationKey],
 		Type:            recordType,
 		Identifier:      identifier,
-		HealthCheckID:   svc.Annotations[healhCheckIdAnnotationKey],
+		HealthCheckID:   svc.Annotations[HealthCheckIdAnnotationKey],
 		HostedZoneID:    svc.Annotations[zoneAnnotationKey],
 		Weight:          w,
 		TTL:             ttl,

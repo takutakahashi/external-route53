@@ -3,11 +3,13 @@ package healthcheck
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	route53v1 "github.com/takutakahashi/external-route53/api/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestEnsure(t *testing.T) {
+func TestEnsureAndDelete(t *testing.T) {
+	rv, _ := uuid.NewRandom()
 	type args struct {
 		h *route53v1.HealthCheck
 	}
@@ -18,11 +20,13 @@ func TestEnsure(t *testing.T) {
 	}{
 		{
 			name: "ok",
+
 			args: args{
 				h: &route53v1.HealthCheck{
 					ObjectMeta: v1.ObjectMeta{
-						Name:      "test",
-						Namespace: "test",
+						Name:            "test",
+						Namespace:       "test",
+						ResourceVersion: rv.String(),
 					},
 					Spec: route53v1.HealthCheckSpec{
 						Enabled:          true,
@@ -45,7 +49,11 @@ func TestEnsure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Ensure(tt.args.h); (err != nil) != tt.wantErr {
+			h, err := Ensure(tt.args.h)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Ensure() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if _, err := Delete(h); (err != nil) != tt.wantErr {
 				t.Errorf("Ensure() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
