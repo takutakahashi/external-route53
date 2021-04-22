@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/juju/errors"
+	"github.com/sirupsen/logrus"
 	route53v1 "github.com/takutakahashi/external-route53/api/v1"
 	r53client "github.com/takutakahashi/external-route53/pkg/client"
 	"github.com/takutakahashi/external-route53/pkg/dns"
@@ -115,15 +116,15 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 		requestInterval = 30
 	}
 	id := h.Status.ID
-	lout, err := r.ListHealthChecks(&route53.ListHealthChecksInput{})
-	if err != nil {
-		return nil, err
-	}
-	for _, res := range lout.HealthChecks {
-		if *res.CallerReference == callerReference {
-			id = *res.Id
-		}
-	}
+	//lout, err := r.ListHealthChecks(&route53.ListHealthChecksInput{})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//for _, res := range lout.HealthChecks {
+	//	if *res.CallerReference == callerReference {
+	//		id = *res.Id
+	//	}
+	//}
 	var resourcePath *string
 	var enableSNI *bool
 	if h.Spec.Protocol == route53v1.ProtocolTCP {
@@ -171,7 +172,7 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 		}
 		h.Status.ID = *out.HealthCheck.Id
 	}
-	_, err = r.ChangeTagsForResource(&route53.ChangeTagsForResourceInput{
+	out, err := r.ChangeTagsForResource(&route53.ChangeTagsForResourceInput{
 		ResourceType: aws.String("healthcheck"),
 		ResourceId:   aws.String(h.Status.ID),
 		AddTags: []*route53.Tag{
@@ -180,6 +181,7 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 				Value: aws.String(name)},
 		},
 	})
+	logrus.Info(out)
 	if err != nil {
 		return nil, err
 	}

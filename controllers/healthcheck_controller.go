@@ -18,9 +18,11 @@ package controllers
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +40,7 @@ type HealthCheckReconciler struct {
 }
 
 const finalizer = "healthcheck.finalizer.external-route53.io"
+const queriedGenerationAnnotationKey = "healthcheck.external-route53.io/queried-generation"
 
 // +kubebuilder:rbac:groups=route53.takutakahashi.dev,resources=healthchecks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route53.takutakahashi.dev,resources=healthchecks/status,verbs=get;update;patch
@@ -55,8 +58,19 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 		}
 	}
+	queriedGeneration, _ := strconv.ParseInt(h.Annotations[queriedGenerationAnnotationKey], 0, 64)
+	logrus.Info(queriedGeneration)
+	logrus.Info(h.Generation)
+	logrus.Info(h.Generation == queriedGeneration)
+	if err == nil && h.Generation == queriedGeneration {
+		return ctrl.Result{}, nil
+	}
 	if h.DeletionTimestamp != nil {
 		err = r.reconcileDelete(h)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		}
+		return ctrl.Result{}, nil
 	} else {
 		err = r.reconcile(h)
 	}
@@ -72,6 +86,10 @@ func (r *HealthCheckReconciler) reconcile(h route53v1.HealthCheck) error {
 		return err
 	}
 	newHealthCheck.Finalizers = append(newHealthCheck.Finalizers, finalizer)
+	if newHealthCheck.Annotations == nil {
+		newHealthCheck.Annotations = map[string]string{}
+	}
+	newHealthCheck.Annotations[queriedGenerationAnnotationKey] = strconv.Itoa(int(newHealthCheck.Generation))
 	return r.Update(context.TODO(), newHealthCheck, &client.UpdateOptions{})
 }
 func (r *HealthCheckReconciler) reconcileDelete(h route53v1.HealthCheck) error {
@@ -96,4 +114,12 @@ func removeString(slice []string, s string) (result []string) {
 		result = append(result, item)
 	}
 	return
+}
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
