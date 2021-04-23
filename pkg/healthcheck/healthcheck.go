@@ -94,6 +94,14 @@ func buildResource(svc *corev1.Service) (*route53v1.HealthCheck, error) {
 			},
 		},
 	}
+	h.SetOwnerReferences([]metav1.OwnerReference{
+		{
+			Kind:       svc.Kind,
+			APIVersion: svc.APIVersion,
+			Name:       svc.Name,
+			UID:        svc.UID,
+		},
+	})
 	return &h, nil
 }
 
