@@ -58,6 +58,13 @@ func Ensure(svc *corev1.Service) error {
 	}
 	return ensureRecord(ro)
 }
+func Delete(svc *corev1.Service) error {
+	ro, err := toUpsertRecordSetOpt(svc)
+	if err != nil {
+		return err
+	}
+	return delete(ro)
+}
 
 func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	var w, ttl int = 1, 10

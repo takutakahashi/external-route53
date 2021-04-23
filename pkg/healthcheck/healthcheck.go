@@ -171,6 +171,7 @@ func Ensure(h *route53v1.HealthCheck) (*route53v1.HealthCheck, error) {
 			FailureThreshold:         aws.Int64(int64(h.Spec.FailureThreshold)),
 			FullyQualifiedDomainName: hostname,
 			IPAddress:                ip,
+			Port:                     aws.Int64(int64(h.Spec.Port)),
 			ResourcePath:             resourcePath,
 			Inverted:                 aws.Bool(h.Spec.Invert),
 			Disabled:                 aws.Bool(!h.Spec.Enabled),
