@@ -81,7 +81,9 @@ func (r *HealthCheckReconciler) reconcile(h route53v1.HealthCheck) error {
 	if err != nil {
 		return err
 	}
-	newHealthCheck.Finalizers = append(newHealthCheck.Finalizers, finalizer)
+	if !containsString(newHealthCheck.Finalizers, finalizer) {
+		newHealthCheck.Finalizers = append(newHealthCheck.Finalizers, finalizer)
+	}
 	if newHealthCheck.Annotations == nil {
 		newHealthCheck.Annotations = map[string]string{}
 	}
