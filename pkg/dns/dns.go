@@ -3,6 +3,7 @@ package dns
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -103,6 +104,10 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	if !ok {
 		identifier = fmt.Sprintf("%s/%s/%s", svc.Namespace, svc.Name, svc.UID)
 	}
+	hostedZoneID := os.Getenv("HOSTED_ZONE_ID")
+	if s, ok := svc.Annotations[zoneAnnotationKey]; ok {
+		hostedZoneID = s
+	}
 	var thn, tip string = "", ""
 	switch svc.Spec.Type {
 	case corev1.ServiceTypeExternalName:
@@ -115,7 +120,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		Type:            recordType,
 		Identifier:      identifier,
 		HealthCheckID:   svc.Annotations[HealthCheckIdAnnotationKey],
-		HostedZoneID:    svc.Annotations[zoneAnnotationKey],
+		HostedZoneID:    hostedZoneID,
 		Weight:          w,
 		TTL:             ttl,
 		Alias:           alias,
