@@ -62,6 +62,10 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
+release: manifests
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/default > ./release.yaml
+
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
