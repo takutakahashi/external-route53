@@ -3,5 +3,13 @@ kind: HealthCheck
 metadata:
   name: healthcheck-sample
 spec:
-  # Add fields here
-  foo: bar
+  enabled: true
+  protocol: "HTTPS"
+  invert: false
+  port: 443
+  path: "/"
+  failureThreshold: 1
+  endpoint:
+    address: 8.8.8.8
+  features:
+    fastInterval: true

@@ -25,18 +25,44 @@ import (
 
 // HealthCheckSpec defines the desired state of HealthCheck
 type HealthCheckSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of HealthCheck. Edit HealthCheck_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Enabled          bool                `json:"enabled,omitempty"`
+	Invert           bool                `json:"invert,omitempty"`
+	Protocol         HealthCheckProtocol `json:"protocol"`
+	Port             int                 `json:"port"`
+	Path             string              `json:"path,omitempty"`
+	Endpoint         HealthCheckEndpoint `json:"endpoint,omitempty"`
+	FailureThreshold int                 `json:"failureThreshold,omitempty"`
+	Features         HealthCheckFeatures `json:"features"`
 }
+
+type HealthCheckFeatures struct {
+	FastInterval bool   `json:"fastInterval,omitempty"`
+	SearchString string `json:"searchString,omitempty"`
+	LatencyGraph bool   `json:"latencyGraph,omitempty"`
+}
+type HealthCheckEndpoint struct {
+	Address  string `json:"address,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+}
+
+type HealthCheckProtocol string
+
+var ProtocolHTTP HealthCheckProtocol = "HTTP"
+var ProtocolHTTPS HealthCheckProtocol = "HTTPS"
+var ProtocolTCP HealthCheckProtocol = "TCP"
 
 // HealthCheckStatus defines the observed state of HealthCheck
 type HealthCheckStatus struct {
+	ID     string            `json:"id,omitempty"`
+	Result HealthCheckResult `json:"result,omitempty"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
+
+type HealthCheckResult string
+
+var ResultHealthy HealthCheckResult = "Healthy"
+var ResultUnhealthy HealthCheckResult = "Unhealthy"
 
 // +kubebuilder:object:root=true
 
