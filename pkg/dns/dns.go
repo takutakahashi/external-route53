@@ -46,6 +46,7 @@ type UpsertRecordSetOpt struct {
 	Alias           bool
 	TargetHostname  string
 	TargetIPAddress string
+	TXTPrefix       string
 }
 
 func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
@@ -126,6 +127,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		Alias:           alias,
 		TargetHostname:  thn,
 		TargetIPAddress: tip,
+		TXTPrefix:       "extr53-",
 	}
 	if err := validateRecordSetOpt(ro); err != nil {
 		return UpsertRecordSetOpt{}, err
@@ -217,7 +219,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 		{
 			Action: aws.String(action),
 			ResourceRecordSet: &route53.ResourceRecordSet{
-				Name: aws.String(ro.Hostname),
+				Name: aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
 				ResourceRecords: []*route53.ResourceRecord{
 					{Value: aws.String("\"set by external-route53\"")},
 				},
@@ -280,9 +282,10 @@ Valid record is below:
 func hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
 	mySession := session.Must(session.NewSession())
 	r := route53.New(mySession)
+	txtname := fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)
 	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:    aws.String(ro.HostedZoneID),
-		StartRecordName: aws.String(ro.Hostname),
+		StartRecordName: aws.String(txtname),
 	})
 	if err != nil {
 		return false, err
@@ -295,9 +298,9 @@ func hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
 	for _, rs := range out.ResourceRecordSets {
 		if domainEqual(ro.Hostname, *rs.Name) {
 			contains = true
-			if *rs.SetIdentifier == ro.Identifier && *rs.Type == "TXT" {
-				ret = true
-			}
+		}
+		if domainEqual(txtname, *rs.Name) && *rs.SetIdentifier == ro.Identifier && *rs.Type == "TXT" {
+			ret = true
 		}
 	}
 	return ret || !contains, nil
