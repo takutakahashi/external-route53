@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/takutakahashi/external-route53/pkg/dns"
@@ -53,12 +54,12 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if svc.DeletionTimestamp != nil {
 
 		if err := r.reconcileDelete(svc.DeepCopy()); err != nil {
-			return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
 		}
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcile(svc.DeepCopy()); err != nil {
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -68,6 +69,9 @@ func (r *ServiceReconciler) reconcileDelete(svc *corev1.Service) error {
 	return dns.Delete(svc)
 }
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
+	if _, ok := svc.Annotations[dns.HostnameAnnotationKey]; !ok {
+		return nil
+	}
 	if a, ok := svc.Annotations[dns.HealthCheckAnnotationKey]; ok && a == "true" && svc.Annotations[dns.HealthCheckIdAnnotationKey] == "" {
 		hcsvc, err := healthcheck.EnsureResource(svc)
 		if err != nil {
