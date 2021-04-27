@@ -170,7 +170,7 @@ func upsert(ro UpsertRecordSetOpt) error {
 
 func delete(ro UpsertRecordSetOpt) error {
 	err := query("DELETE", ro)
-	if strings.Contains(err.Error(), "but it was not found") {
+	if err != nil && strings.Contains(err.Error(), "but it was not found") {
 		return nil
 	}
 	return err
@@ -214,6 +214,20 @@ func query(action string, ro UpsertRecordSetOpt) error {
 				TTL:             ttl,
 			},
 		},
+		{
+			Action: aws.String(action),
+			ResourceRecordSet: &route53.ResourceRecordSet{
+				Name: aws.String(ro.Hostname),
+				ResourceRecords: []*route53.ResourceRecord{
+					{Value: aws.String("\"set by external-route53\"")},
+				},
+				SetIdentifier: aws.String(ro.Identifier),
+				Weight:        aws.Int64(int64(ro.Weight)),
+				HealthCheckId: healthCheckId,
+				Type:          aws.String("TXT"),
+				TTL:           aws.Int64(300),
+			},
+		},
 	}
 	logrus.Info(changes)
 	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
@@ -251,7 +265,46 @@ func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if !ro.Alias && ro.TargetIPAddress == "" {
 		return errors.New("Alias record disabled but target IP Address is not defined")
 	}
+	if ok, err := hasValidTxtRecord(ro); err != nil || !ok {
+		return errors.New("This record doesn't have valid txt record. it's possible to maintain from other system")
+	}
 	return nil
+}
+
+/**
+The records created by this controller has TXT record for management.
+Valid record is below:
+  1. TXT record exists. if set, it has prefix ex: prefix-example.com for managing example.com record.
+  2. TXT record has a value of the record's identifier. ex: uuid
+*/
+func hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
+	mySession := session.Must(session.NewSession())
+	r := route53.New(mySession)
+	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
+		HostedZoneId:    aws.String(ro.HostedZoneID),
+		StartRecordName: aws.String(ro.Hostname),
+	})
+	if err != nil {
+		return false, err
+	}
+	ret := false
+	contains := false
+	if len(out.ResourceRecordSets) == 0 {
+		return true, nil
+	}
+	for _, rs := range out.ResourceRecordSets {
+		if domainEqual(ro.Hostname, *rs.Name) {
+			contains = true
+			if *rs.SetIdentifier == ro.Identifier && *rs.Type == "TXT" {
+				ret = true
+			}
+		}
+	}
+	return ret || !contains, nil
+}
+
+func domainEqual(s1, s2 string) bool {
+	return s1 == s2 || fmt.Sprintf("%s.", s1) == s2 || fmt.Sprintf("%s.", s2) == s1
 }
 
 func supportedType(t string) bool {
