@@ -10,13 +10,23 @@ jobs:
   build:
     name: Upload Release Asset
     runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: takutakahashi/external-route53
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: 'Build:image'
+        uses: docker/build-push-action@v2
+        with:
+          registry: ghcr.io
+          username: "takutakahashi"
+          password: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${IMAGE_NAME}
+          tags: ${GITHUB_REF#refs/tags/}
       - name: Build manifests
         run: |
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          make release IMG=takutakahashi/external-route53:${GITHUB_REF#refs/tags/}
+          make release IMG=ghcr.io/${IMAGE_NAME}:${GITHUB_REF#refs/tags/}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
