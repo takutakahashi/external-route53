@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Branch name
+        id: branch_name
+        run: |
+          echo ::set-output name=SOURCE_NAME::${GITHUB_REF#refs/*/}
+          echo ::set-output name=SOURCE_BRANCH::${GITHUB_REF#refs/heads/}
+          echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
       - name: 'Build:image'
         uses: docker/build-push-action@v2
         with:
@@ -22,11 +28,11 @@ jobs:
           username: "takutakahashi"
           password: ${{ secrets.GITHUB_TOKEN }}
           repository: ${IMAGE_NAME}
-          tags: ${GITHUB_REF#refs/tags/}
+          tags: ${{ steps.branch_name.outputs.SOURCE_TAG }}
       - name: Build manifests
         run: |
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          make release IMG=ghcr.io/${IMAGE_NAME}:${GITHUB_REF#refs/tags/}
+          make release IMG=ghcr.io/${IMAGE_NAME}:${{ steps.branch_name.outputs.SOURCE_TAG }}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
