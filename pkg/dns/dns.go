@@ -49,26 +49,38 @@ type UpsertRecordSetOpt struct {
 	TXTPrefix       string
 }
 
+type dns struct {
+	client Route53API
+}
+
+func NewDns() dns {
+	mySession := session.Must(session.NewSession())
+	d := dns{
+		client: route53.New(mySession),
+	}
+	return d
+}
+
 func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
 	return nil
 }
 
-func Ensure(svc *corev1.Service) error {
-	ro, err := toUpsertRecordSetOpt(svc)
+func (d *dns) Ensure(svc *corev1.Service) error {
+	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
 	}
-	return ensureRecord(ro)
+	return d.ensureRecord(ro)
 }
-func Delete(svc *corev1.Service) error {
-	ro, err := toUpsertRecordSetOpt(svc)
+func (d *dns) Delete(svc *corev1.Service) error {
+	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
 	}
-	return delete(ro)
+	return d.delete(ro)
 }
 
-func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
+func (d *dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	var w, ttl int = 1, 10
 	_, ok := svc.Annotations[weightAnnotationKey]
 	if ok {
@@ -129,23 +141,21 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		TargetIPAddress: tip,
 		TXTPrefix:       "extr53-",
 	}
-	if err := validateRecordSetOpt(ro); err != nil {
+	if err := d.validateRecordSetOpt(ro); err != nil {
 		return UpsertRecordSetOpt{}, err
 	}
 	return ro, nil
 }
 
-func ensureRecord(ro UpsertRecordSetOpt) error {
-	if err := validateRecordSetOpt(ro); err != nil {
+func (d *dns) ensureRecord(ro UpsertRecordSetOpt) error {
+	if err := d.validateRecordSetOpt(ro); err != nil {
 		return err
 	}
-	return upsert(ro)
+	return d.upsert(ro)
 }
 
-func recordExists(ro UpsertRecordSetOpt) (bool, error) {
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
-	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
+func (d dns) recordExists(ro UpsertRecordSetOpt) (bool, error) {
+	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:          aws.String(ro.HostedZoneID),
 		StartRecordIdentifier: &ro.Identifier,
 		StartRecordName:       &ro.Hostname,
@@ -165,13 +175,12 @@ func recordExists(ro UpsertRecordSetOpt) (bool, error) {
 	}
 	return false, nil
 }
-
-func upsert(ro UpsertRecordSetOpt) error {
-	return query("UPSERT", ro)
+func (d *dns) upsert(ro UpsertRecordSetOpt) error {
+	return d.query("UPSERT", ro)
 }
 
-func delete(ro UpsertRecordSetOpt) error {
-	err := query("DELETE", ro)
+func (d *dns) delete(ro UpsertRecordSetOpt) error {
+	err := d.query("DELETE", ro)
 	if err != nil && strings.Contains(err.Error(), "but it was not found") {
 		return nil
 	}
@@ -179,13 +188,11 @@ func delete(ro UpsertRecordSetOpt) error {
 
 }
 
-func query(action string, ro UpsertRecordSetOpt) error {
+func (d *dns) query(action string, ro UpsertRecordSetOpt) error {
 	var healthCheckId *string = nil
 	if ro.HealthCheckID != "" {
 		healthCheckId = &ro.HealthCheckID
 	}
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
 	var ttl *int64
 	var at *route53.AliasTarget = nil
 	var rrs []*route53.ResourceRecord = nil
@@ -232,7 +239,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 		},
 	}
 	logrus.Info(changes)
-	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
+	_, err := d.client.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		HostedZoneId: aws.String(ro.HostedZoneID),
 		ChangeBatch: &route53.ChangeBatch{
 			Comment: aws.String("change from external-route53"),
@@ -245,7 +252,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 	return nil
 }
 
-func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
+func (d *dns) validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if ro.HostedZoneID == "" {
 		return errors.New("hosted zone id is not found")
 	}
@@ -267,7 +274,7 @@ func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if !ro.Alias && ro.TargetIPAddress == "" {
 		return errors.New("Alias record disabled but target IP Address is not defined")
 	}
-	if ok, err := hasValidTxtRecord(ro); err != nil || !ok {
+	if ok, err := d.hasValidTxtRecord(ro); err != nil || !ok {
 		return errors.New("This record doesn't have valid txt record. it's possible to maintain from other system")
 	}
 	return nil
@@ -279,11 +286,9 @@ Valid record is below:
   1. TXT record exists. if set, it has prefix ex: prefix-example.com for managing example.com record.
   2. TXT record has a value of the record's identifier. ex: uuid
 */
-func hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
+func (d *dns) hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
 	txtname := fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)
-	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
+	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:    aws.String(ro.HostedZoneID),
 		StartRecordName: aws.String(txtname),
 	})

@@ -49,18 +49,23 @@ func Test_ensureRecord(t *testing.T) {
 		ro UpsertRecordSetOpt
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{ro: ROs[0]},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ensureRecord(tt.args.ro); (err != nil) != tt.wantErr {
+			d := tt.beforeDo()
+			if err := d.ensureRecord(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("ensureRecord() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -72,33 +77,44 @@ func Test_recordExists(t *testing.T) {
 		ro UpsertRecordSetOpt
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    bool
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		want     bool
+		wantErr  bool
 	}{
 		{
-			name:    "ok",
-			args:    args{ro: ROs[0]},
+			name: "ok",
+			args: args{ro: ROs[0]},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name:    "ok",
-			args:    args{ro: ROs[1]},
+			name: "ok",
+			args: args{ro: ROs[1]},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name:    "ng",
-			args:    args{ro: ROs[2]},
+			name: "ng",
+			args: args{ro: ROs[2]},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			want:    false,
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := recordExists(tt.args.ro)
+			d := tt.beforeDo()
+			got, err := d.recordExists(tt.args.ro)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("recordExists() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -115,21 +131,26 @@ func Test_upsert(t *testing.T) {
 		ro UpsertRecordSetOpt
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{
 				ro: ROs[0],
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := upsert(tt.args.ro); (err != nil) != tt.wantErr {
+			d := tt.beforeDo()
+			if err := d.upsert(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("upsert() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -141,21 +162,26 @@ func Test_delete(t *testing.T) {
 		ro UpsertRecordSetOpt
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{
 				ro: ROs[0],
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := delete(tt.args.ro); (err != nil) != tt.wantErr {
+			d := tt.beforeDo()
+			if err := d.delete(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("delete() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -167,10 +193,11 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 		svc *corev1.Service
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    UpsertRecordSetOpt
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		want     UpsertRecordSetOpt
+		wantErr  bool
 	}{
 		{
 			name: "loadbalancer",
@@ -203,6 +230,9 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 						},
 					},
 				},
+			},
+			beforeDo: func() dns {
+				return NewDns()
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -243,6 +273,9 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 						},
 					},
 				},
+			},
+			beforeDo: func() dns {
+				return NewDns()
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -284,6 +317,9 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
@@ -318,6 +354,9 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
 				Type:            "A",
@@ -335,7 +374,8 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := toUpsertRecordSetOpt(tt.args.svc)
+			d := tt.beforeDo()
+			got, err := d.toUpsertRecordSetOpt(tt.args.svc)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("toUpsertRecordSetOpt() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -352,9 +392,10 @@ func TestEnsure(t *testing.T) {
 		svc *corev1.Service
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name     string
+		args     args
+		beforeDo func() dns
+		wantErr  bool
 	}{
 		{
 			name: "omitted-loadbalancer",
@@ -381,6 +422,9 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			wantErr: false,
 		},
 		{
@@ -402,12 +446,16 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
+			beforeDo: func() dns {
+				return NewDns()
+			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Ensure(tt.args.svc); (err != nil) != tt.wantErr {
+			d := tt.beforeDo()
+			if err := d.Ensure(tt.args.svc); (err != nil) != tt.wantErr {
 				t.Errorf("Ensure() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
