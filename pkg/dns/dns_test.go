@@ -138,15 +138,36 @@ func Test_recordExists(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		want     bool
 		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{ro: ROs[0]},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[0]
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:          aws.String(ro.HostedZoneID),
+						StartRecordIdentifier: aws.String(ro.Identifier),
+						StartRecordName:       aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+						StartRecordType:       aws.String(ro.Type),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(ro.Hostname),
+								SetIdentifier: aws.String(ro.Identifier),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want:    true,
 			wantErr: false,
@@ -154,8 +175,29 @@ func Test_recordExists(t *testing.T) {
 		{
 			name: "ok",
 			args: args{ro: ROs[1]},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[1]
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:          aws.String(ro.HostedZoneID),
+						StartRecordIdentifier: aws.String(ro.Identifier),
+						StartRecordName:       aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+						StartRecordType:       aws.String(ro.Type),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(ro.Hostname),
+								SetIdentifier: aws.String(ro.Identifier),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want:    true,
 			wantErr: false,
@@ -163,8 +205,29 @@ func Test_recordExists(t *testing.T) {
 		{
 			name: "ng",
 			args: args{ro: ROs[2]},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[2]
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:          aws.String(ro.HostedZoneID),
+						StartRecordIdentifier: aws.String(ro.Identifier),
+						StartRecordName:       aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+						StartRecordType:       aws.String(ro.Type),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String("exists.test.takutakahashi.dev."),
+								SetIdentifier: aws.String("/api/v1/namespaces/beta/services/test"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want:    false,
 			wantErr: false,
@@ -172,7 +235,8 @@ func Test_recordExists(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			got, err := d.recordExists(tt.args.ro)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("recordExists() error = %v, wantErr %v", err, tt.wantErr)
