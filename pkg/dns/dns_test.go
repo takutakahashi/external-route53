@@ -256,7 +256,7 @@ func Test_upsert(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -264,15 +264,60 @@ func Test_upsert(t *testing.T) {
 			args: args{
 				ro: ROs[0],
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[0]
+
+				changes := []*route53.Change{
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name:            aws.String(ro.Hostname),
+							AliasTarget:     nil,
+							ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(ro.TargetIPAddress)}},
+							SetIdentifier:   aws.String(ro.Identifier),
+							Weight:          aws.Int64(int64(ro.Weight)),
+							Type:            aws.String(ro.Type),
+							TTL:             aws.Int64(int64(ro.TTL)),
+						},
+					},
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+							ResourceRecords: []*route53.ResourceRecord{
+								{Value: aws.String("\"set by external-route53\"")},
+							},
+							SetIdentifier: aws.String(ro.Identifier),
+							Weight:        aws.Int64(int64(ro.Weight)),
+							Type:          aws.String("TXT"),
+							TTL:           aws.Int64(300),
+						},
+					},
+				}
+
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ChangeResourceRecordSets(
+					&route53.ChangeResourceRecordSetsInput{
+						HostedZoneId: aws.String(ro.HostedZoneID),
+						ChangeBatch: &route53.ChangeBatch{
+							Comment: aws.String("change from external-route53"),
+							Changes: changes,
+						},
+					},
+				).Return(
+					nil,
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			if err := d.upsert(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("upsert() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -287,7 +332,7 @@ func Test_delete(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -295,15 +340,60 @@ func Test_delete(t *testing.T) {
 			args: args{
 				ro: ROs[0],
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[0]
+
+				changes := []*route53.Change{
+					{
+						Action: aws.String("DELETE"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name:            aws.String(ro.Hostname),
+							AliasTarget:     nil,
+							ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(ro.TargetIPAddress)}},
+							SetIdentifier:   aws.String(ro.Identifier),
+							Weight:          aws.Int64(int64(ro.Weight)),
+							Type:            aws.String(ro.Type),
+							TTL:             aws.Int64(int64(ro.TTL)),
+						},
+					},
+					{
+						Action: aws.String("DELETE"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+							ResourceRecords: []*route53.ResourceRecord{
+								{Value: aws.String("\"set by external-route53\"")},
+							},
+							SetIdentifier: aws.String(ro.Identifier),
+							Weight:        aws.Int64(int64(ro.Weight)),
+							Type:          aws.String("TXT"),
+							TTL:           aws.Int64(300),
+						},
+					},
+				}
+
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ChangeResourceRecordSets(
+					&route53.ChangeResourceRecordSetsInput{
+						HostedZoneId: aws.String(ro.HostedZoneID),
+						ChangeBatch: &route53.ChangeBatch{
+							Comment: aws.String("change from external-route53"),
+							Changes: changes,
+						},
+					},
+				).Return(
+					nil,
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			if err := d.delete(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("delete() error = %v, wantErr %v", err, tt.wantErr)
 			}
