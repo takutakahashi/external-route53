@@ -1,8 +1,13 @@
 package dns
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/route53"
+	gomock "github.com/golang/mock/gomock"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,20 +56,74 @@ func Test_ensureRecord(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{ro: ROs[0]},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				ro := ROs[0]
+				changes := []*route53.Change{
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name:            aws.String(ro.Hostname),
+							AliasTarget:     nil,
+							ResourceRecords: []*route53.ResourceRecord{{Value: aws.String(ro.TargetIPAddress)}},
+							SetIdentifier:   aws.String(ro.Identifier),
+							Weight:          aws.Int64(int64(ro.Weight)),
+							Type:            aws.String(ro.Type),
+							TTL:             aws.Int64(int64(ro.TTL)),
+						},
+					},
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+							ResourceRecords: []*route53.ResourceRecord{
+								{Value: aws.String("\"set by external-route53\"")},
+							},
+							SetIdentifier: aws.String(ro.Identifier),
+							Weight:        aws.Int64(int64(ro.Weight)),
+							Type:          aws.String("TXT"),
+							TTL:           aws.Int64(300),
+						},
+					},
+				}
+
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ChangeResourceRecordSets(
+					&route53.ChangeResourceRecordSetsInput{
+						HostedZoneId: aws.String(ro.HostedZoneID),
+						ChangeBatch: &route53.ChangeBatch{
+							Comment: aws.String("change from external-route53"),
+							Changes: changes,
+						},
+					},
+				).Return(
+					nil,
+					nil,
+				).Times(1)
+
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String(ro.HostedZoneID),
+						StartRecordName: aws.String(fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			if err := d.ensureRecord(tt.args.ro); (err != nil) != tt.wantErr {
 				t.Errorf("ensureRecord() error = %v, wantErr %v", err, tt.wantErr)
 			}
