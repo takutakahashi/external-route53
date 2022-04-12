@@ -408,7 +408,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		want     UpsertRecordSetOpt
 		wantErr  bool
 	}{
@@ -444,8 +444,28 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("test"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -458,6 +478,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 				Alias:           false,
 				TargetHostname:  "",
 				TargetIPAddress: "10.10.10.1",
+				TXTPrefix:       "extr53-",
 			},
 			wantErr: false,
 		},
@@ -487,8 +508,28 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("test"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test/aaa"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -501,6 +542,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 				Alias:           false,
 				TargetHostname:  "",
 				TargetIPAddress: "10.10.10.1",
+				TXTPrefix:       "extr53-",
 			},
 			wantErr: false,
 		},
@@ -530,8 +572,28 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("test"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -544,6 +606,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 				Alias:           true,
 				TargetHostname:  "test.release.example.com",
 				TargetIPAddress: "",
+				TXTPrefix:       "extr53-",
 			},
 			wantErr: false,
 		},
@@ -567,8 +630,28 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("test"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test/aaa"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -581,13 +664,15 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 				Alias:           true,
 				TargetHostname:  "test.release.example.com",
 				TargetIPAddress: "",
+				TXTPrefix:       "extr53-",
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			got, err := d.toUpsertRecordSetOpt(tt.args.svc)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("toUpsertRecordSetOpt() error = %v, wantErr %v", err, tt.wantErr)
