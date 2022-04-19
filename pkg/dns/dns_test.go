@@ -692,7 +692,7 @@ func TestEnsure(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() dns
+		beforeDo func() (dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -720,8 +720,68 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "omitted-lb.test.takutakahashi.dev")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("Z09261522C0IVI11TUTK7"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test/aaa"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(2)
+
+				changes := []*route53.Change{
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name:            aws.String("omitted-lb.test.takutakahashi.dev"),
+							AliasTarget:     nil,
+							ResourceRecords: []*route53.ResourceRecord{{Value: aws.String("10.10.10.1")}},
+							SetIdentifier:   aws.String("test/test/"),
+							Weight:          aws.Int64(int64(1)),
+							Type:            aws.String("A"),
+							TTL:             aws.Int64(int64(10)),
+						},
+					},
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String(txtname),
+							ResourceRecords: []*route53.ResourceRecord{
+								{Value: aws.String("\"set by external-route53\"")},
+							},
+							SetIdentifier: aws.String("test/test/"),
+							Weight:        aws.Int64(int64(1)),
+							Type:          aws.String("TXT"),
+							TTL:           aws.Int64(300),
+						},
+					},
+				}
+				r53api.EXPECT().ChangeResourceRecordSets(
+					&route53.ChangeResourceRecordSetsInput{
+						HostedZoneId: aws.String("Z09261522C0IVI11TUTK7"),
+						ChangeBatch: &route53.ChangeBatch{
+							Comment: aws.String("change from external-route53"),
+							Changes: changes,
+						},
+					},
+				).Return(
+					nil,
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
@@ -744,15 +804,78 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() dns {
-				return NewDns()
+			beforeDo: func() (dns, *gomock.Controller) {
+				txtname := "external-route53.test.takutakahashi.dev"
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("Z09261522C0IVI11TUTK7"),
+						StartRecordName: aws.String("extr53-test1.test.takutakahashi.dev"),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test/aaa"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(2)
+
+				changes := []*route53.Change{
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String("test1.test.takutakahashi.dev"),
+							AliasTarget: &route53.AliasTarget{
+								DNSName:              aws.String("external-route53.test.takutakahashi.dev"),
+								EvaluateTargetHealth: aws.Bool(true),
+								HostedZoneId:         aws.String("Z09261522C0IVI11TUTK7"),
+							},
+							SetIdentifier: aws.String("test/test/"),
+							Weight:        aws.Int64(int64(1)),
+							Type:          aws.String("A"),
+						},
+					},
+					{
+						Action: aws.String("UPSERT"),
+						ResourceRecordSet: &route53.ResourceRecordSet{
+							Name: aws.String("extr53-test1.test.takutakahashi.dev"),
+							ResourceRecords: []*route53.ResourceRecord{
+								{Value: aws.String("\"set by external-route53\"")},
+							},
+							SetIdentifier: aws.String("test/test/"),
+							Weight:        aws.Int64(int64(1)),
+							Type:          aws.String("TXT"),
+							TTL:           aws.Int64(300),
+						},
+					},
+				}
+				r53api.EXPECT().ChangeResourceRecordSets(
+					&route53.ChangeResourceRecordSetsInput{
+						HostedZoneId: aws.String("Z09261522C0IVI11TUTK7"),
+						ChangeBatch: &route53.ChangeBatch{
+							Comment: aws.String("change from external-route53"),
+							Changes: changes,
+						},
+					},
+				).Return(
+					nil,
+					nil,
+				).Times(1)
+				return dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := tt.beforeDo()
+			d, controller := tt.beforeDo()
+			defer controller.Finish()
 			if err := d.Ensure(tt.args.svc); (err != nil) != tt.wantErr {
 				t.Errorf("Ensure() error = %v, wantErr %v", err, tt.wantErr)
 			}
