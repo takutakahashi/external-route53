@@ -56,13 +56,13 @@ func Test_ensureRecord(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{ro: ROs[0]},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[0]
 				changes := []*route53.Change{
 					{
@@ -116,7 +116,7 @@ func Test_ensureRecord(t *testing.T) {
 					&route53.ListResourceRecordSetsOutput{},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 		},
 	}
@@ -138,14 +138,14 @@ func Test_recordExists(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		want     bool
 		wantErr  bool
 	}{
 		{
 			name: "ok",
 			args: args{ro: ROs[0]},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[0]
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -167,7 +167,7 @@ func Test_recordExists(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want:    true,
 			wantErr: false,
@@ -175,7 +175,7 @@ func Test_recordExists(t *testing.T) {
 		{
 			name: "ok",
 			args: args{ro: ROs[1]},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[1]
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -197,7 +197,7 @@ func Test_recordExists(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want:    true,
 			wantErr: false,
@@ -205,7 +205,7 @@ func Test_recordExists(t *testing.T) {
 		{
 			name: "ng",
 			args: args{ro: ROs[2]},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[2]
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -227,7 +227,7 @@ func Test_recordExists(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want:    false,
 			wantErr: false,
@@ -256,7 +256,7 @@ func Test_upsert(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -264,7 +264,7 @@ func Test_upsert(t *testing.T) {
 			args: args{
 				ro: ROs[0],
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[0]
 
 				changes := []*route53.Change{
@@ -309,7 +309,7 @@ func Test_upsert(t *testing.T) {
 					nil,
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
@@ -332,7 +332,7 @@ func Test_delete(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -340,7 +340,7 @@ func Test_delete(t *testing.T) {
 			args: args{
 				ro: ROs[0],
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				ro := ROs[0]
 
 				changes := []*route53.Change{
@@ -385,7 +385,7 @@ func Test_delete(t *testing.T) {
 					nil,
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
@@ -408,7 +408,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		want     UpsertRecordSetOpt
 		wantErr  bool
 	}{
@@ -444,7 +444,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -465,7 +465,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -508,7 +508,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -529,7 +529,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -572,7 +572,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -593,7 +593,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -630,7 +630,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -651,7 +651,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -692,7 +692,7 @@ func TestEnsure(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		beforeDo func() (dns, *gomock.Controller)
+		beforeDo func() (Dns, *gomock.Controller)
 		wantErr  bool
 	}{
 		{
@@ -720,7 +720,7 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := fmt.Sprintf("%s%s", "extr53-", "omitted-lb.test.takutakahashi.dev")
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -781,7 +781,7 @@ func TestEnsure(t *testing.T) {
 					nil,
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},
@@ -804,7 +804,7 @@ func TestEnsure(t *testing.T) {
 					},
 				},
 			},
-			beforeDo: func() (dns, *gomock.Controller) {
+			beforeDo: func() (Dns, *gomock.Controller) {
 				txtname := "external-route53.test.takutakahashi.dev"
 				controller := gomock.NewController(t)
 				r53api := NewMockRoute53API(controller)
@@ -867,7 +867,7 @@ func TestEnsure(t *testing.T) {
 					nil,
 					nil,
 				).Times(1)
-				return dns{client: r53api}, controller
+				return Dns{client: r53api}, controller
 			},
 			wantErr: false,
 		},

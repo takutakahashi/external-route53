@@ -49,13 +49,13 @@ type UpsertRecordSetOpt struct {
 	TXTPrefix       string
 }
 
-type dns struct {
+type Dns struct {
 	client Route53API
 }
 
-func NewDns() dns {
+func NewDns() Dns {
 	mySession := session.Must(session.NewSession())
-	d := dns{
+	d := Dns{
 		client: route53.New(mySession),
 	}
 	return d
@@ -65,14 +65,14 @@ func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
 	return nil
 }
 
-func (d *dns) Ensure(svc *corev1.Service) error {
+func (d *Dns) Ensure(svc *corev1.Service) error {
 	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
 	}
 	return d.ensureRecord(ro)
 }
-func (d *dns) Delete(svc *corev1.Service) error {
+func (d *Dns) Delete(svc *corev1.Service) error {
 	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func (d *dns) Delete(svc *corev1.Service) error {
 	return d.delete(ro)
 }
 
-func (d *dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
+func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	var w, ttl int = 1, 10
 	_, ok := svc.Annotations[weightAnnotationKey]
 	if ok {
@@ -147,14 +147,14 @@ func (d *dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, err
 	return ro, nil
 }
 
-func (d *dns) ensureRecord(ro UpsertRecordSetOpt) error {
+func (d *Dns) ensureRecord(ro UpsertRecordSetOpt) error {
 	if err := d.validateRecordSetOpt(ro); err != nil {
 		return err
 	}
 	return d.upsert(ro)
 }
 
-func (d dns) recordExists(ro UpsertRecordSetOpt) (bool, error) {
+func (d Dns) recordExists(ro UpsertRecordSetOpt) (bool, error) {
 	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:          aws.String(ro.HostedZoneID),
 		StartRecordIdentifier: &ro.Identifier,
@@ -175,11 +175,11 @@ func (d dns) recordExists(ro UpsertRecordSetOpt) (bool, error) {
 	}
 	return false, nil
 }
-func (d *dns) upsert(ro UpsertRecordSetOpt) error {
+func (d *Dns) upsert(ro UpsertRecordSetOpt) error {
 	return d.query("UPSERT", ro)
 }
 
-func (d *dns) delete(ro UpsertRecordSetOpt) error {
+func (d *Dns) delete(ro UpsertRecordSetOpt) error {
 	err := d.query("DELETE", ro)
 	if err != nil && strings.Contains(err.Error(), "but it was not found") {
 		return nil
@@ -188,7 +188,7 @@ func (d *dns) delete(ro UpsertRecordSetOpt) error {
 
 }
 
-func (d *dns) query(action string, ro UpsertRecordSetOpt) error {
+func (d *Dns) query(action string, ro UpsertRecordSetOpt) error {
 	var healthCheckId *string = nil
 	if ro.HealthCheckID != "" {
 		healthCheckId = &ro.HealthCheckID
@@ -252,7 +252,7 @@ func (d *dns) query(action string, ro UpsertRecordSetOpt) error {
 	return nil
 }
 
-func (d *dns) validateRecordSetOpt(ro UpsertRecordSetOpt) error {
+func (d *Dns) validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if ro.HostedZoneID == "" {
 		return errors.New("hosted zone id is not found")
 	}
@@ -286,7 +286,7 @@ Valid record is below:
   1. TXT record exists. if set, it has prefix ex: prefix-example.com for managing example.com record.
   2. TXT record has a value of the record's identifier. ex: uuid
 */
-func (d *dns) hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
+func (d *Dns) hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
 	txtname := fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)
 	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:    aws.String(ro.HostedZoneID),
