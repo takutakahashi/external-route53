@@ -668,6 +668,70 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "elb-on-eks",
+			args: args{
+				svc: &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "test",
+						Annotations: map[string]string{
+							HostnameAnnotationKey:    "test.test.example.com",
+							HealthCheckAnnotationKey: "enable",
+							zoneAnnotationKey:        "test",
+						},
+						UID: "aaa",
+					},
+					Spec: corev1.ServiceSpec{
+						Type: corev1.ServiceTypeLoadBalancer,
+					},
+					Status: corev1.ServiceStatus{
+						LoadBalancer: corev1.LoadBalancerStatus{
+							Ingress: []corev1.LoadBalancerIngress{
+								{Hostname: "test.elb.ap-northeast-1.amazonaws.com"},
+							},
+						},
+					},
+				},
+			},
+			beforeDo: func() (Dns, *gomock.Controller) {
+				txtname := fmt.Sprintf("%s%s", "extr53-", "test.test.example.com")
+				controller := gomock.NewController(t)
+				r53api := NewMockRoute53API(controller)
+				r53api.EXPECT().ListResourceRecordSets(
+					&route53.ListResourceRecordSetsInput{
+						HostedZoneId:    aws.String("test"),
+						StartRecordName: aws.String(txtname),
+					},
+				).Return(
+					&route53.ListResourceRecordSetsOutput{
+						ResourceRecordSets: []*route53.ResourceRecordSet{
+							{
+								Name:          aws.String(txtname),
+								SetIdentifier: aws.String("test/test/aaa"),
+								Type:          aws.String("TXT"),
+							},
+						},
+					},
+					nil,
+				).Times(1)
+				return Dns{client: r53api}, controller
+			},
+			want: UpsertRecordSetOpt{
+				Hostname:        "test.test.example.com",
+				Type:            "A",
+				Identifier:      "test/test/aaa",
+				HealthCheckID:   "",
+				HostedZoneID:    "test",
+				Weight:          1,
+				TTL:             10,
+				Alias:           true,
+				TargetHostname:  "test.elb.ap-northeast-1.amazonaws.com",
+				TargetIPAddress: "",
+				TXTPrefix:       "extr53-",
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -107,7 +107,12 @@ func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, err
 		}
 		alias = ret
 	} else {
-		alias = svc.Spec.Type == corev1.ServiceTypeExternalName
+		switch {
+		case svc.Spec.Type == corev1.ServiceTypeExternalName:
+			alias = true
+		case svc.Spec.Type == corev1.ServiceTypeLoadBalancer:
+			alias = svc.Status.LoadBalancer.Ingress[0].IP == ""
+		}
 	}
 	recordType, ok := svc.Annotations[recordTypeAnnotationKey]
 	if !ok {
@@ -127,6 +132,9 @@ func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, err
 		thn = svc.Spec.ExternalName
 	case corev1.ServiceTypeLoadBalancer:
 		tip = svc.Status.LoadBalancer.Ingress[0].IP
+		if tip == "" {
+			thn = svc.Status.LoadBalancer.Ingress[0].Hostname
+		}
 	}
 	ro := UpsertRecordSetOpt{
 		Hostname:        svc.Annotations[HostnameAnnotationKey],
