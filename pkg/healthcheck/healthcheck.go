@@ -75,19 +75,24 @@ func buildResource(svc *corev1.Service) (*route53v1.HealthCheck, error) {
 	if svc.Spec.Type == corev1.ServiceTypeNodePort {
 		p = svc.Spec.Ports[0].NodePort
 	}
+	var e route53v1.HealthCheckEndpoint
+	switch {
+	case svc.Status.LoadBalancer.Ingress[0].IP != "":
+		e = route53v1.HealthCheckEndpoint{Address: svc.Status.LoadBalancer.Ingress[0].IP}
+	case svc.Status.LoadBalancer.Ingress[0].Hostname != "":
+		e = route53v1.HealthCheckEndpoint{Hostname: svc.Status.LoadBalancer.Ingress[0].Hostname}
+	}
 	h := route53v1.HealthCheck{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svc.Name,
 			Namespace: svc.Namespace,
 		},
 		Spec: route53v1.HealthCheckSpec{
-			Enabled:  true,
-			Invert:   false,
-			Protocol: route53v1.ProtocolTCP,
-			Port:     int(p),
-			Endpoint: route53v1.HealthCheckEndpoint{
-				Address: svc.Status.LoadBalancer.Ingress[0].IP,
-			},
+			Enabled:          true,
+			Invert:           false,
+			Protocol:         route53v1.ProtocolTCP,
+			Port:             int(p),
+			Endpoint:         e,
 			FailureThreshold: 3,
 			Features: route53v1.HealthCheckFeatures{
 				FastInterval: true,
