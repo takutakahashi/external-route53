@@ -12,7 +12,6 @@ import (
 )
 
 func TestEnsureAndDelete(t *testing.T) {
-	rv, _ := uuid.NewRandom()
 	type args struct {
 		h *route53v1.HealthCheck
 	}
@@ -29,7 +28,7 @@ func TestEnsureAndDelete(t *testing.T) {
 					ObjectMeta: v1.ObjectMeta{
 						Name:            "test",
 						Namespace:       "test",
-						ResourceVersion: rv.String(),
+						ResourceVersion: uuid.NewString(),
 					},
 					Spec: route53v1.HealthCheckSpec{
 						Enabled:          true,
@@ -40,6 +39,33 @@ func TestEnsureAndDelete(t *testing.T) {
 						FailureThreshold: 1,
 						Endpoint: route53v1.HealthCheckEndpoint{
 							Address: "8.8.8.8",
+						},
+						Features: route53v1.HealthCheckFeatures{
+							FastInterval: true,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "elb",
+
+			args: args{
+				h: &route53v1.HealthCheck{
+					ObjectMeta: v1.ObjectMeta{
+						Name:            "test",
+						Namespace:       "test",
+						ResourceVersion: uuid.NewString(),
+					},
+					Spec: route53v1.HealthCheckSpec{
+						Enabled:          true,
+						Invert:           false,
+						Protocol:         route53v1.ProtocolTCP,
+						Port:             30080,
+						FailureThreshold: 3,
+						Endpoint: route53v1.HealthCheckEndpoint{
+							Hostname: "test.elb.ap-northeast-1.amazonaws.com",
 						},
 						Features: route53v1.HealthCheckFeatures{
 							FastInterval: true,

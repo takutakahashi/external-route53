@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.38.21
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/mock v1.2.0
-	github.com/google/uuid v1.1.1
+	github.com/google/uuid v1.3.0
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
 	github.com/juju/testing v0.0.0-20210324180055-18c50b0c2098 // indirect
 	github.com/onsi/ginkgo v1.11.0
