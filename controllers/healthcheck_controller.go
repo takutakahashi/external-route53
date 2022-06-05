@@ -71,7 +71,7 @@ func (r *HealthCheckReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		err = r.reconcile(h)
 	}
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 	return ctrl.Result{}, nil
 }

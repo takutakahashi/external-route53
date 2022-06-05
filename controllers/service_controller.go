@@ -60,7 +60,7 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcile(svc.DeepCopy()); err != nil {
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
+		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
 
 	return ctrl.Result{}, nil
