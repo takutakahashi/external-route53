@@ -54,12 +54,15 @@ type UpsertRecordSetOpt struct {
 
 type Dns struct {
 	client Route53API
+
+	getElbCanonicalHostedZoneId func(dnsName string) (zoneId *string, err error)
 }
 
 func NewDns() Dns {
 	mySession := session.Must(session.NewSession())
 	d := Dns{
-		client: route53.New(mySession),
+		client:                      route53.New(mySession),
+		getElbCanonicalHostedZoneId: getElbCanonicalHostedZoneId,
 	}
 	return d
 }
@@ -136,7 +139,7 @@ func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, err
 	ingress := svc.Status.LoadBalancer.Ingress
 	r := regexp.MustCompile(`\.elb\.[A-Za-z0-9\-]+\.amazonaws\.com$`)
 	if len(ingress) > 0 && r.MatchString(ingress[0].Hostname) {
-		zoneID, err := getElbCanonicalHostedZoneId(ingress[0].Hostname)
+		zoneID, err := d.getElbCanonicalHostedZoneId(ingress[0].Hostname)
 		if err != nil {
 			return UpsertRecordSetOpt{}, err
 		}

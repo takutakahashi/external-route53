@@ -465,6 +465,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
+
 				return Dns{client: r53api}, controller
 			},
 			want: UpsertRecordSetOpt{
@@ -715,7 +716,11 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 					},
 					nil,
 				).Times(1)
-				return Dns{client: r53api}, controller
+				getElb := func(dnsName string) (zoneId *string, err error) {
+					return aws.String("elb-hosted-zone"), nil
+				}
+
+				return Dns{client: r53api, getElbCanonicalHostedZoneId: getElb}, controller
 			},
 			want: UpsertRecordSetOpt{
 				Hostname:        "test.test.example.com",
@@ -723,6 +728,7 @@ func Test_toUpsertRecordSetOpt(t *testing.T) {
 				Identifier:      "test/test/aaa",
 				HealthCheckID:   "",
 				HostedZoneID:    "test",
+				ElbHostedZoneID: "elb-hosted-zone",
 				Weight:          1,
 				TTL:             10,
 				Alias:           true,
