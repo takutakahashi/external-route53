@@ -35,6 +35,7 @@ type ServiceReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	Dns    dns.Dns
 }
 
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -59,14 +60,14 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 	if err := r.reconcile(svc.DeepCopy()); err != nil {
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
+		return ctrl.Result{RequeueAfter: time.Minute}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
 func (r *ServiceReconciler) reconcileDelete(svc *corev1.Service) error {
-	return dns.Delete(svc)
+	return r.Dns.Delete(svc)
 }
 func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
 	if _, ok := svc.Annotations[dns.HostnameAnnotationKey]; !ok {
@@ -81,7 +82,7 @@ func (r *ServiceReconciler) reconcile(svc *corev1.Service) error {
 			return r.Update(context.TODO(), hcsvc.DeepCopy(), &client.UpdateOptions{})
 		}
 	}
-	return dns.Ensure(svc)
+	return r.Dns.Ensure(svc)
 }
 
 func (r *ServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {

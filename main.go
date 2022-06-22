@@ -30,6 +30,7 @@ import (
 
 	route53v1 "github.com/takutakahashi/external-route53/api/v1"
 	"github.com/takutakahashi/external-route53/controllers"
+	"github.com/takutakahashi/external-route53/pkg/dns"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -80,6 +81,7 @@ func main() {
 	if err = (&controllers.ServiceReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Service"),
+		Dns:    dns.NewDns(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Service")

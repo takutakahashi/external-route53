@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +43,7 @@ type UpsertRecordSetOpt struct {
 	Identifier      string
 	HealthCheckID   string
 	HostedZoneID    string
+	ElbHostedZoneID string
 	Weight          int
 	TTL             int
 	Alias           bool
@@ -49,26 +52,41 @@ type UpsertRecordSetOpt struct {
 	TXTPrefix       string
 }
 
+type Dns struct {
+	client Route53API
+
+	getElbCanonicalHostedZoneId func(dnsName string) (zoneId *string, err error)
+}
+
+func NewDns() Dns {
+	mySession := session.Must(session.NewSession())
+	d := Dns{
+		client:                      route53.New(mySession),
+		getElbCanonicalHostedZoneId: getElbCanonicalHostedZoneId,
+	}
+	return d
+}
+
 func SatisfiedAliasRecordCreation(svc *corev1.Service) error {
 	return nil
 }
 
-func Ensure(svc *corev1.Service) error {
-	ro, err := toUpsertRecordSetOpt(svc)
+func (d *Dns) Ensure(svc *corev1.Service) error {
+	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
 	}
-	return ensureRecord(ro)
+	return d.ensureRecord(ro)
 }
-func Delete(svc *corev1.Service) error {
-	ro, err := toUpsertRecordSetOpt(svc)
+func (d *Dns) Delete(svc *corev1.Service) error {
+	ro, err := d.toUpsertRecordSetOpt(svc)
 	if err != nil {
 		return err
 	}
-	return delete(ro)
+	return d.delete(ro)
 }
 
-func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
+func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	var w, ttl int = 1, 10
 	_, ok := svc.Annotations[weightAnnotationKey]
 	if ok {
@@ -95,7 +113,16 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		}
 		alias = ret
 	} else {
-		alias = svc.Spec.Type == corev1.ServiceTypeExternalName
+		switch svc.Spec.Type {
+		case corev1.ServiceTypeExternalName:
+			alias = true
+		case corev1.ServiceTypeLoadBalancer:
+			if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				alias = svc.Status.LoadBalancer.Ingress[0].IP == ""
+			} else {
+				return UpsertRecordSetOpt{}, fmt.Errorf("Can't find LoadBalancer ingress")
+			}
+		}
 	}
 	recordType, ok := svc.Annotations[recordTypeAnnotationKey]
 	if !ok {
@@ -105,16 +132,33 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 	if !ok {
 		identifier = fmt.Sprintf("%s/%s/%s", svc.Namespace, svc.Name, svc.UID)
 	}
+
 	hostedZoneID := os.Getenv("HOSTED_ZONE_ID")
 	if s, ok := svc.Annotations[zoneAnnotationKey]; ok {
 		hostedZoneID = s
 	}
+
+	// ELB
+	elbHostedZoneID := ""
+	ingress := svc.Status.LoadBalancer.Ingress
+	r := regexp.MustCompile(`\.elb\.[A-Za-z0-9\-]+\.amazonaws\.com$`)
+	if len(ingress) > 0 && r.MatchString(ingress[0].Hostname) {
+		zoneID, err := d.getElbCanonicalHostedZoneId(ingress[0].Hostname)
+		if err != nil {
+			return UpsertRecordSetOpt{}, err
+		}
+		elbHostedZoneID = *zoneID
+	}
+
 	var thn, tip string = "", ""
 	switch svc.Spec.Type {
 	case corev1.ServiceTypeExternalName:
 		thn = svc.Spec.ExternalName
 	case corev1.ServiceTypeLoadBalancer:
 		tip = svc.Status.LoadBalancer.Ingress[0].IP
+		if tip == "" {
+			thn = svc.Status.LoadBalancer.Ingress[0].Hostname
+		}
 	}
 	ro := UpsertRecordSetOpt{
 		Hostname:        svc.Annotations[HostnameAnnotationKey],
@@ -122,6 +166,7 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		Identifier:      identifier,
 		HealthCheckID:   svc.Annotations[HealthCheckIdAnnotationKey],
 		HostedZoneID:    hostedZoneID,
+		ElbHostedZoneID: elbHostedZoneID,
 		Weight:          w,
 		TTL:             ttl,
 		Alias:           alias,
@@ -129,23 +174,21 @@ func toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, error) {
 		TargetIPAddress: tip,
 		TXTPrefix:       "extr53-",
 	}
-	if err := validateRecordSetOpt(ro); err != nil {
+	if err := d.validateRecordSetOpt(ro); err != nil {
 		return UpsertRecordSetOpt{}, err
 	}
 	return ro, nil
 }
 
-func ensureRecord(ro UpsertRecordSetOpt) error {
-	if err := validateRecordSetOpt(ro); err != nil {
+func (d *Dns) ensureRecord(ro UpsertRecordSetOpt) error {
+	if err := d.validateRecordSetOpt(ro); err != nil {
 		return err
 	}
-	return upsert(ro)
+	return d.upsert(ro)
 }
 
-func recordExists(ro UpsertRecordSetOpt) (bool, error) {
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
-	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
+func (d Dns) recordExists(ro UpsertRecordSetOpt) (bool, error) {
+	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:          aws.String(ro.HostedZoneID),
 		StartRecordIdentifier: &ro.Identifier,
 		StartRecordName:       &ro.Hostname,
@@ -165,13 +208,12 @@ func recordExists(ro UpsertRecordSetOpt) (bool, error) {
 	}
 	return false, nil
 }
-
-func upsert(ro UpsertRecordSetOpt) error {
-	return query("UPSERT", ro)
+func (d *Dns) upsert(ro UpsertRecordSetOpt) error {
+	return d.query("UPSERT", ro)
 }
 
-func delete(ro UpsertRecordSetOpt) error {
-	err := query("DELETE", ro)
+func (d *Dns) delete(ro UpsertRecordSetOpt) error {
+	err := d.query("DELETE", ro)
 	if err != nil && strings.Contains(err.Error(), "but it was not found") {
 		return nil
 	}
@@ -179,20 +221,22 @@ func delete(ro UpsertRecordSetOpt) error {
 
 }
 
-func query(action string, ro UpsertRecordSetOpt) error {
+func (d *Dns) query(action string, ro UpsertRecordSetOpt) error {
 	var healthCheckId *string = nil
 	if ro.HealthCheckID != "" {
 		healthCheckId = &ro.HealthCheckID
 	}
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
 	var ttl *int64
 	var at *route53.AliasTarget = nil
 	var rrs []*route53.ResourceRecord = nil
 	if ro.Alias {
+		zoneId := ro.HostedZoneID
+		if ro.ElbHostedZoneID != "" {
+			zoneId = ro.ElbHostedZoneID
+		}
 		at = &route53.AliasTarget{
 			EvaluateTargetHealth: aws.Bool(true),
-			HostedZoneId:         aws.String(ro.HostedZoneID),
+			HostedZoneId:         aws.String(zoneId),
 			DNSName:              aws.String(ro.TargetHostname),
 		}
 		ttl = nil
@@ -232,7 +276,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 		},
 	}
 	logrus.Info(changes)
-	_, err := r.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
+	_, err := d.client.ChangeResourceRecordSets(&route53.ChangeResourceRecordSetsInput{
 		HostedZoneId: aws.String(ro.HostedZoneID),
 		ChangeBatch: &route53.ChangeBatch{
 			Comment: aws.String("change from external-route53"),
@@ -245,7 +289,7 @@ func query(action string, ro UpsertRecordSetOpt) error {
 	return nil
 }
 
-func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
+func (d *Dns) validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if ro.HostedZoneID == "" {
 		return errors.New("hosted zone id is not found")
 	}
@@ -267,7 +311,7 @@ func validateRecordSetOpt(ro UpsertRecordSetOpt) error {
 	if !ro.Alias && ro.TargetIPAddress == "" {
 		return errors.New("Alias record disabled but target IP Address is not defined")
 	}
-	if ok, err := hasValidTxtRecord(ro); err != nil || !ok {
+	if ok, err := d.hasValidTxtRecord(ro); err != nil || !ok {
 		return errors.New("This record doesn't have valid txt record. it's possible to maintain from other system")
 	}
 	return nil
@@ -279,11 +323,9 @@ Valid record is below:
   1. TXT record exists. if set, it has prefix ex: prefix-example.com for managing example.com record.
   2. TXT record has a value of the record's identifier. ex: uuid
 */
-func hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
-	mySession := session.Must(session.NewSession())
-	r := route53.New(mySession)
+func (d *Dns) hasValidTxtRecord(ro UpsertRecordSetOpt) (bool, error) {
 	txtname := fmt.Sprintf("%s%s", ro.TXTPrefix, ro.Hostname)
-	out, err := r.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
+	out, err := d.client.ListResourceRecordSets(&route53.ListResourceRecordSetsInput{
 		HostedZoneId:    aws.String(ro.HostedZoneID),
 		StartRecordName: aws.String(txtname),
 	})
@@ -313,4 +355,26 @@ func domainEqual(s1, s2 string) bool {
 func supportedType(t string) bool {
 	// only A record is supported
 	return t == "A"
+}
+
+func getElbCanonicalHostedZoneId(dnsName string) (zoneId *string, err error) {
+	mySession := session.Must(session.NewSession())
+	c := elbv2.New(mySession, aws.NewConfig().WithRegion("ap-northeast-1"))
+
+	// perse Load Balancer name from dns record
+	// ex: "xxx-yyy-0123456789-abcdefghijklmn.elb.ap-northeast-1.amazonaws.com" to xxx-yyy-0123456789
+	n := strings.Split(strings.Split(dnsName, ".")[0], "-")
+	lbName := strings.Join(n[:len(n)-1], "-")
+
+	resp, err := c.DescribeLoadBalancers(&elbv2.DescribeLoadBalancersInput{
+		Names: []*string{aws.String(lbName)},
+	})
+	if err != nil {
+		return zoneId, err
+	}
+	if len(resp.LoadBalancers) == 0 {
+		return zoneId, fmt.Errorf("ELB:\"%s\" not found", dnsName)
+	}
+	zoneId = resp.LoadBalancers[0].CanonicalHostedZoneId
+	return zoneId, nil
 }
