@@ -113,11 +113,15 @@ func (d *Dns) toUpsertRecordSetOpt(svc *corev1.Service) (UpsertRecordSetOpt, err
 		}
 		alias = ret
 	} else {
-		switch {
-		case svc.Spec.Type == corev1.ServiceTypeExternalName:
+		switch svc.Spec.Type {
+		case corev1.ServiceTypeExternalName:
 			alias = true
-		case svc.Spec.Type == corev1.ServiceTypeLoadBalancer:
-			alias = svc.Status.LoadBalancer.Ingress[0].IP == ""
+		case corev1.ServiceTypeLoadBalancer:
+			if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				alias = svc.Status.LoadBalancer.Ingress[0].IP == ""
+			} else {
+				return UpsertRecordSetOpt{}, fmt.Errorf("Can't find LoadBalancer ingress")
+			}
 		}
 	}
 	recordType, ok := svc.Annotations[recordTypeAnnotationKey]

@@ -81,6 +81,8 @@ func buildResource(svc *corev1.Service) (*route53v1.HealthCheck, error) {
 		e = route53v1.HealthCheckEndpoint{Address: svc.Status.LoadBalancer.Ingress[0].IP}
 	case svc.Status.LoadBalancer.Ingress[0].Hostname != "":
 		e = route53v1.HealthCheckEndpoint{Hostname: svc.Status.LoadBalancer.Ingress[0].Hostname}
+	default:
+		return nil, nil
 	}
 	h := route53v1.HealthCheck{
 		ObjectMeta: metav1.ObjectMeta{
